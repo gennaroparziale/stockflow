@@ -5,7 +5,7 @@ if (!isset($currentPage)) {
 }
 
 // Definisce quali pagine appartengono a quale dropdown per mantenere lo stato "active"
-$anagrafichePages = array('gestione_articoli.php', 'gestione_fornitori.php');
+$anagrafichePages = array('gestione_articoli.php', 'gestione_fornitori.php', 'gestione_categorie.php', 'gestione_proprieta.php');
 $reportPages = array('report_sottoscorta.php');
 ?>
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
@@ -44,10 +44,13 @@ $reportPages = array('report_sottoscorta.php');
                     </a>
                     <ul class="dropdown-menu">
                         <li><a class="dropdown-item" href="gestione_articoli.php">Gestione Articoli</a></li>
+                        <li><a class="dropdown-item" href="gestione_categorie.php">Gestione Categorie</a></li>
+                        <li><a class="dropdown-item" href="gestione_proprieta.php">Gestione Proprietà</a></li>
+                        <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="gestione_fornitori.php">Gestione Fornitori</a></li>
                     </ul>
                 </li>
-                 <li class="nav-item dropdown">
+                <li class="nav-item dropdown">
                     <a class="nav-link dropdown-toggle <?php if (in_array($currentPage, $reportPages)) echo 'active'; ?>" href="#" role="button" data-bs-toggle="dropdown">
                         <i class="bi bi-file-earmark-text"></i> Report
                     </a>
@@ -71,6 +74,6 @@ $reportPages = array('report_sottoscorta.php');
                     </ul>
                 </li>
             </ul>
-            </div>
+        </div>
     </div>
 </nav>
