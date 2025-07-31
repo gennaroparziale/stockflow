@@ -9,7 +9,7 @@ $fornitori = $fornitori_stmt->fetchAll(PDO::FETCH_ASSOC);
 $categorie_stmt = $pdo->query("SELECT id, nome FROM categorie_articoli ORDER BY nome");
 $categorie = $categorie_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// --- NUOVA LOGICA DI RICERCA E FILTRI ---
+// --- LOGICA DI RICERCA E FILTRI ---
 $params = array();
 $where_clauses = array();
 
@@ -18,7 +18,6 @@ $search_term = isset($_GET['q']) ? trim($_GET['q']) : '';
 $categoria_id_filtro = isset($_GET['categoria_id']) ? (int)$_GET['categoria_id'] : 0;
 $filtri_proprieta = isset($_GET['filter_prop']) && is_array($_GET['filter_prop']) ? $_GET['filter_prop'] : array();
 
-// Filtra solo le proprietà con un valore inserito
 $filtri_proprieta_attivi = array_filter($filtri_proprieta, function($v) { return $v !== '' && $v !== null; });
 $num_filtri_proprieta = count($filtri_proprieta_attivi);
 
@@ -35,12 +34,8 @@ $articoli_sql = "
     LEFT JOIN categorie_articoli c ON a.categoria_id = c.id
 ";
 
-// Se ci sono filtri sulle proprietà, la query deve cambiare struttura
 if ($num_filtri_proprieta > 0) {
-    // Uniamo la tabella dei valori
     $articoli_sql .= " JOIN valori_proprieta vp ON a.id = vp.id_articolo ";
-
-    // Creiamo un blocco di condizioni OR per le proprietà
     $prop_conditions = [];
     foreach ($filtri_proprieta_attivi as $id_prop => $valore) {
         $prop_conditions[] = "(vp.id_proprieta = ? AND vp.valore LIKE ?)";
@@ -50,28 +45,23 @@ if ($num_filtri_proprieta > 0) {
     $where_clauses[] = "(" . implode(' OR ', $prop_conditions) . ")";
 }
 
-// Filtro di ricerca testuale
 if (!empty($search_term)) {
     $where_clauses[] = "(a.codice_articolo LIKE ? OR a.descrizione LIKE ? OR f.nome_fornitore LIKE ? OR c.nome LIKE ?)";
     $like_term = '%' . $search_term . '%';
     array_push($params, $like_term, $like_term, $like_term, $like_term);
 }
 
-// Filtro per categoria
 if ($categoria_id_filtro > 0) {
     $where_clauses[] = "a.categoria_id = ?";
     $params[] = $categoria_id_filtro;
 }
 
-// Aggiungiamo le clausole WHERE alla query
 if (!empty($where_clauses)) {
     $articoli_sql .= " WHERE " . implode(' AND ', $where_clauses);
 }
 
-// Raggruppiamo per articolo per poter contare le proprietà
 $articoli_sql .= " GROUP BY a.id, c.nome, f.nome_fornitore ";
 
-// Se abbiamo filtrato per proprietà, usiamo HAVING per assicurarci che l'articolo le abbia TUTTE
 if ($num_filtri_proprieta > 0) {
     $articoli_sql .= " HAVING COUNT(DISTINCT vp.id_proprieta) = ?";
     $params[] = $num_filtri_proprieta;
@@ -138,9 +128,7 @@ include 'navbarMagazzino.php';
 
     <table class="table table-striped table-hover">
         <thead class="table-dark">
-        <tr>
-            <th>Codice</th><th>Descrizione</th><th>Categoria</th><th>Fornitore</th><th class="text-end">Azioni</th>
-        </tr>
+        <tr><th>Codice</th><th>Descrizione</th><th>Categoria</th><th>Fornitore</th><th class="text-end">Azioni</th></tr>
         </thead>
         <tbody>
         <?php if (empty($articoli)): ?>
@@ -168,38 +156,83 @@ include 'navbarMagazzino.php';
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form id="articoloForm" action="processa_articolo.php" method="POST">
-                <div class="modal-header"><h5 class="modal-title" id="modalTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <input type="hidden" name="id" id="articoloId"><input type="hidden" name="action" id="formAction">
-                    <div class="row"><div class="col-md-6 mb-3"><label for="codice_articolo" class="form-label">Codice Articolo <span class="text-danger">*</span></label><input type="text" class="form-control" id="codice_articolo" name="codice_articolo" required></div><div class="col-md-6 mb-3"><label for="descrizione" class="form-label">Descrizione <span class="text-danger">*</span></label><input type="text" class="form-control" id="descrizione" name="descrizione" required></div></div>
-                    <div class="row"><div class="col-md-6 mb-3"><label for="categoria_id" class="form-label">Categoria</label><select class="form-select" id="categoria_id" name="categoria_id"><option value="">-- Seleziona --</option><?php foreach ($categorie as $c): ?><option value="<?php echo $c['id']; ?>"><?php echo htmlspecialchars($c['nome']); ?></option><?php endforeach; ?></select></div><div class="col-md-6 mb-3"><label for="fornitore_id" class="form-label">Fornitore</label><select class="form-select" id="fornitore_id" name="fornitore_id"><option value="">-- Seleziona --</option><?php foreach ($fornitori as $f): ?><option value="<?php echo $f['id']; ?>"><?php echo htmlspecialchars($f['nome_fornitore']); ?></option><?php endforeach; ?></select></div></div>
-                    <div class="row"><div class="col-md-6 mb-3"><label for="prezzo_acquisto" class="form-label">Prezzo Acquisto</label><div class="input-group"><span class="input-group-text">€</span><input type="number" step="0.01" class="form-control" id="prezzo_acquisto" name="prezzo_acquisto"></div></div><div class="col-md-6 mb-3"><label for="scorta_minima" class="form-label">Scorta Minima</label><input type="number" class="form-control" id="scorta_minima" name="scorta_minima" min="0"></div></div>
-                    <hr><h5 class="mt-3">Proprietà Specifiche</h5><div id="proprieta-dinamiche-container" class="row"></div>
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button><button type="submit" class="btn btn-primary">Salva</button></div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="articoloId">
+                    <input type="hidden" name="action" id="formAction">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="codice_articolo" class="form-label">Codice Articolo <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="codice_articolo" name="codice_articolo" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="descrizione" class="form-label">Descrizione <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="descrizione" name="descrizione" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="categoria_id" class="form-label">Categoria</label>
+                            <select class="form-select" id="categoria_id" name="categoria_id">
+                                <option value="">-- Seleziona --</option>
+                                <?php foreach ($categorie as $c): ?>
+                                    <option value="<?php echo $c['id']; ?>"><?php echo htmlspecialchars($c['nome']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="fornitore_id" class="form-label">Fornitore</label>
+                            <select class="form-select" id="fornitore_id" name="fornitore_id">
+                                <option value="">-- Seleziona --</option>
+                                <?php foreach ($fornitori as $f): ?>
+                                    <option value="<?php echo $f['id']; ?>"><?php echo htmlspecialchars($f['nome_fornitore']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="prezzo_acquisto" class="form-label">Prezzo Acquisto</label>
+                            <div class="input-group">
+                                <span class="input-group-text">€</span>
+                                <input type="number" step="0.01" class="form-control" id="prezzo_acquisto" name="prezzo_acquisto">
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="scorta_minima" class="form-label">Scorta Minima</label>
+                            <input type="number" class="form-control" id="scorta_minima" name="scorta_minima" min="0">
+                        </div>
+                    </div>
+                    <hr>
+                    <h5 class="mt-3">Proprietà Specifiche</h5>
+                    <div id="proprieta-dinamiche-container" class="row"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn btn-primary">Salva</button>
+                </div>
             </form>
         </div>
     </div>
 </div>
-
-<form id="deleteForm" method="POST" action="processa_articolo.php"><input type="hidden" name="id" id="deleteId"><input type="hidden" name="action" value="delete"></form>
+<form id="deleteForm" method="POST" action="processa_articolo.php">
+    <input type="hidden" name="id" id="deleteId">
+    <input type="hidden" name="action" value="delete">
+</form>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
     $(document).ready(function() {
+        // --- INIZIALIZZAZIONE ELEMENTI ---
         const articoloModal = new bootstrap.Modal(document.getElementById('articoloModal'));
         const articoloForm = $('#articoloForm');
+        const urlParams = new URLSearchParams(window.location.search);
 
-        // Funzione per recuperare un parametro dall'URL (gestisce nomi array)
-        function getUrlParameterByName(name, url = window.location.href) {
-            name = name.replace(/[\[\]]/g, '\\$&');
-            var regex = new RegExp('[?&]' + name + '=([^&#]*)'),
-                results = regex.exec(url);
-            return results === null ? '' : decodeURIComponent(results[1].replace(/\+/g, ' '));
-        }
-
-        // Funzione AJAX generica per caricare proprietà
+        // --- FUNZIONI AJAX ---
         function caricaProprieta(url, container, categoriaId, articoloId = 0) {
             if (!categoriaId) {
                 container.html('<p class="text-muted small m-0 pt-2">Seleziona una categoria.</p>');
@@ -216,11 +249,12 @@ include 'navbarMagazzino.php';
                     }
                     response.forEach(function(prop) {
                         let inputType = (prop.tipo_dato === 'numero') ? 'number' : (prop.tipo_dato === 'data') ? 'date' : 'text';
-                        let fieldHtml, valore;
-                        if (url === 'get_proprieta_categoria.php') {
-                            valore = getUrlParameterByName(`filter_prop[${prop.id}]`);
+                        let valore, fieldHtml;
+
+                        if (url.includes('get_proprieta_categoria')) { // Siamo nei filtri
+                            valore = urlParams.get(`filter_prop[${prop.id}]`) || '';
                             fieldHtml = `<div class="col-md-4"><input type="${inputType}" class="form-control form-control-sm" name="filter_prop[${prop.id}]" placeholder="${prop.nome_proprieta}" value="${valore}"></div>`;
-                        } else {
+                        } else { // Siamo nel modale
                             valore = prop.valore || '';
                             fieldHtml = `<div class="col-md-6 mb-3"><label class="form-label">${prop.nome}</label><input type="${inputType}" class="form-control" name="prop[${prop.id}]" value="${valore}"></div>`;
                         }
@@ -235,7 +269,7 @@ include 'navbarMagazzino.php';
         const filtriContainer = $('#filtri-proprieta-container');
         $('#filtro_categoria_id').on('change', function() {
             caricaProprieta('get_proprieta_categoria.php', filtriContainer, $(this).val());
-        }).trigger('change'); // Esegui al caricamento della pagina
+        }).trigger('change');
 
         // --- GESTIONE MODALE ---
         const proprietaContainerModale = $('#proprieta-dinamiche-container');
@@ -252,13 +286,13 @@ include 'navbarMagazzino.php';
             articoloForm[0].reset();
             $('#modalTitle').text('Modifica Articolo');
             $('#formAction').val('edit');
-            articoloForm.find('input[name="id"]').val(articolo.id);
-            articoloForm.find('input[name="codice_articolo"]').val(articolo.codice_articolo);
-            articoloForm.find('input[name="descrizione"]').val(articolo.descrizione);
-            articoloForm.find('select[name="categoria_id"]').val(articolo.categoria_id);
-            articoloForm.find('select[name="fornitore_id"]').val(articolo.fornitore_id);
-            articoloForm.find('input[name="prezzo_acquisto"]').val(articolo.prezzo_acquisto);
-            articoloForm.find('input[name="scorta_minima"]').val(articolo.scorta_minima);
+            articoloForm.find('#articoloId').val(articolo.id);
+            articoloForm.find('#codice_articolo').val(articolo.codice_articolo);
+            articoloForm.find('#descrizione').val(articolo.descrizione);
+            articoloForm.find('#categoria_id').val(articolo.categoria_id);
+            articoloForm.find('#fornitore_id').val(articolo.fornitore_id);
+            articoloForm.find('#prezzo_acquisto').val(articolo.prezzo_acquisto);
+            articoloForm.find('#scorta_minima').val(articolo.scorta_minima);
             caricaProprieta('get_proprieta_articolo.php', proprietaContainerModale, articolo.categoria_id, articolo.id);
             articoloModal.show();
         });
