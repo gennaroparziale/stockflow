@@ -109,7 +109,7 @@ include 'navbarMagazzino.php';
     <h1>Inventario</h1>
 
     <div class="card bg-light p-3 mb-4">
-        <form action="inventario.php" method="GET">
+        <form id="filtri-form" action="inventario.php" method="GET">
             <div class="row g-3 align-items-end">
                 <div class="col-md-12">
                     <label for="q" class="form-label">Ricerca Rapida</label>
@@ -144,11 +144,7 @@ include 'navbarMagazzino.php';
     <table class="table table-striped table-hover">
         <thead class="table-dark">
         <tr>
-            <th>Codice</th>
-            <th>Descrizione</th>
-            <th>Fornitore</th>
-            <th class="text-center">Giacenza</th>
-            <th class="text-end">Azioni</th>
+            <th>Codice</th><th>Descrizione</th><th>Fornitore</th><th class="text-center">Giacenza</th><th class="text-end">Azioni</th>
         </tr>
         </thead>
         <tbody>
@@ -179,22 +175,18 @@ include 'navbarMagazzino.php';
             <ul class="pagination justify-content-center">
                 <?php
                 $queryParams = $_GET;
-                $queryParams['page'] = $current_page - 1;
+                if(isset($queryParams['page'])) unset($queryParams['page']);
                 ?>
                 <li class="page-item <?php if($current_page <= 1){ echo 'disabled'; } ?>">
-                    <a class="page-link" href="?<?php echo http_build_query($queryParams); ?>">Indietro</a>
+                    <a class="page-link" href="?<?php echo http_build_query(array_merge($queryParams, ['page' => $current_page - 1])); ?>">Indietro</a>
                 </li>
-                <?php for ($i = 1; $i <= $total_pages; $i++):
-                    $queryParams['page'] = $i;
-                    ?>
+                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
                     <li class="page-item <?php if($i == $current_page){ echo 'active'; } ?>">
-                        <a class="page-link" href="?<?php echo http_build_query($queryParams); ?>"><?php echo $i; ?></a>
+                        <a class="page-link" href="?<?php echo http_build_query(array_merge($queryParams, ['page' => $i])); ?>"><?php echo $i; ?></a>
                     </li>
-                <?php endfor;
-                $queryParams['page'] = $current_page + 1;
-                ?>
+                <?php endfor; ?>
                 <li class="page-item <?php if($current_page >= $total_pages){ echo 'disabled'; } ?>">
-                    <a class="page-link" href="?<?php echo http_build_query($queryParams); ?>">Avanti</a>
+                    <a class="page-link" href="?<?php echo http_build_query(array_merge($queryParams, ['page' => $current_page + 1])); ?>">Avanti</a>
                 </li>
             </ul>
         </nav>
@@ -224,8 +216,6 @@ include 'navbarMagazzino.php';
                         return;
                     }
                     proprieta.forEach(function(prop) {
-                        // **ECCO LA CORREZIONE**
-                        // Usiamo URLSearchParams, il metodo standard e più affidabile.
                         const valoreEsistente = urlParams.get(`filter_prop[${prop.id}]`) || '';
                         let inputType = (prop.tipo_dato === 'numero') ? 'number' : (prop.tipo_dato === 'data') ? 'date' : 'text';
                         let fieldHtml = `<div class="col-md-4"><input type="${inputType}" class="form-control form-control-sm" name="filter_prop[${prop.id}]" placeholder="${prop.nome_proprieta}" value="${valoreEsistente}"></div>`;
@@ -236,9 +226,13 @@ include 'navbarMagazzino.php';
             });
         }
 
-        $('#filtro_categoria_id').on('change', function() {
-            caricaFiltriProprieta($(this).val());
-        }).trigger('change'); // Esegui al caricamento della pagina per ripopolare i filtri
+        $('#filtro_categoria_id').on('change', function(event) {
+            if (event.originalEvent) {
+                $('#filtri-form').submit();
+            } else {
+                caricaFiltriProprieta($(this).val());
+            }
+        }).trigger('change');
     });
 </script>
 </body>
