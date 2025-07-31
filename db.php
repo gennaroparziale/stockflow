@@ -1,9 +1,9 @@
 <?php
 // Impostazioni del database
 define('DB_HOST', 'localhost');
-define('DB_USER', 'itecna'); // Sostituisci con il tuo utente
-define('DB_PASS', '1C53c985@5');     // Sostituisci con la tua password
-define('DB_NAME', 'itecna'); // Sostituisci con il nome del tuo DB
+define('DB_USER', 'user'); // Sostituisci con il tuo utente
+define('DB_PASS', 'password');     // Sostituisci con la tua password
+define('DB_NAME', 'dbname'); // Sostituisci con il nome del tuo DB
 
 // Creazione della connessione
 try {
