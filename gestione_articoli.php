@@ -9,7 +9,11 @@ $fornitori = $fornitori_stmt->fetchAll(PDO::FETCH_ASSOC);
 $categorie_stmt = $pdo->query("SELECT id, nome FROM categorie_articoli ORDER BY nome");
 $categorie = $categorie_stmt->fetchAll(PDO::FETCH_ASSOC);
 
-// --- LOGICA DI RICERCA E FILTRI ---
+// --- LOGICA DI RICERCA, FILTRI E PAGINAZIONE ---
+$items_per_page = 15; // Puoi cambiare questo valore
+$current_page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($current_page < 1) $current_page = 1;
+
 $params = array();
 $where_clauses = array();
 
@@ -22,12 +26,7 @@ $filtri_proprieta_attivi = array_filter($filtri_proprieta, function($v) { return
 $num_filtri_proprieta = count($filtri_proprieta_attivi);
 
 // Costruzione della query base
-$articoli_sql = "
-    SELECT 
-        a.id, a.codice_articolo, a.descrizione, a.prezzo_acquisto, 
-        a.scorta_minima, a.fornitore_id, a.categoria_id,
-        f.nome_fornitore,
-        c.nome as nome_categoria
+$sql_base = "
     FROM 
         articoli a
     LEFT JOIN fornitori f ON a.fornitore_id = f.id
@@ -35,7 +34,7 @@ $articoli_sql = "
 ";
 
 if ($num_filtri_proprieta > 0) {
-    $articoli_sql .= " JOIN valori_proprieta vp ON a.id = vp.id_articolo ";
+    $sql_base .= " JOIN valori_proprieta vp ON a.id = vp.id_articolo ";
     $prop_conditions = [];
     foreach ($filtri_proprieta_attivi as $id_prop => $valore) {
         $prop_conditions[] = "(vp.id_proprieta = ? AND vp.valore LIKE ?)";
@@ -56,18 +55,39 @@ if ($categoria_id_filtro > 0) {
     $params[] = $categoria_id_filtro;
 }
 
+$sql_where = "";
 if (!empty($where_clauses)) {
-    $articoli_sql .= " WHERE " . implode(' AND ', $where_clauses);
+    $sql_where = " WHERE " . implode(' AND ', $where_clauses);
 }
 
-$articoli_sql .= " GROUP BY a.id, c.nome, f.nome_fornitore ";
+// --- QUERY PER CONTEGGIO TOTALE ---
+$count_sql = "SELECT COUNT(DISTINCT a.id) " . $sql_base . $sql_where;
+$count_stmt = $pdo->prepare($count_sql);
+$count_stmt->execute($params);
+$total_items = $count_stmt->fetchColumn();
+
+// Calcolo pagine totali e offset
+$total_pages = $total_items > 0 ? ceil($total_items / $items_per_page) : 1;
+if ($current_page > $total_pages) $current_page = $total_pages;
+$offset = ($current_page - 1) * $items_per_page;
+
+// --- QUERY PER ESTRARRE I DATI DELLA PAGINA CORRENTE ---
+$articoli_sql = "
+    SELECT 
+        a.id, a.codice_articolo, a.descrizione, a.prezzo_acquisto, 
+        a.scorta_minima, a.fornitore_id, a.categoria_id,
+        f.nome_fornitore,
+        c.nome as nome_categoria
+    " . $sql_base . $sql_where . "
+    GROUP BY a.id, c.nome, f.nome_fornitore
+";
 
 if ($num_filtri_proprieta > 0) {
     $articoli_sql .= " HAVING COUNT(DISTINCT vp.id_proprieta) = ?";
-    $params[] = $num_filtri_proprieta;
+    array_push($params, $num_filtri_proprieta);
 }
 
-$articoli_sql .= " ORDER BY a.descrizione";
+$articoli_sql .= " ORDER BY a.descrizione ASC LIMIT " . (int)$items_per_page . " OFFSET " . (int)$offset;
 
 $articoli_stmt = $pdo->prepare($articoli_sql);
 $articoli_stmt->execute($params);
@@ -150,27 +170,102 @@ include 'navbarMagazzino.php';
         <?php endif; ?>
         </tbody>
     </table>
+
+    <?php if ($total_pages > 1): ?>
+        <nav>
+            <ul class="pagination justify-content-center">
+                <?php
+                $queryParams = $_GET;
+                if(isset($queryParams['page'])) unset($queryParams['page']);
+                ?>
+                <li class="page-item <?php if($current_page <= 1){ echo 'disabled'; } ?>">
+                    <a class="page-link" href="?<?php echo http_build_query(array_merge($queryParams, ['page' => $current_page - 1])); ?>">Indietro</a>
+                </li>
+                <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                    <li class="page-item <?php if($i == $current_page){ echo 'active'; } ?>">
+                        <a class="page-link" href="?<?php echo http_build_query(array_merge($queryParams, ['page' => $i])); ?>"><?php echo $i; ?></a>
+                    </li>
+                <?php endfor; ?>
+                <li class="page-item <?php if($current_page >= $total_pages){ echo 'disabled'; } ?>">
+                    <a class="page-link" href="?<?php echo http_build_query(array_merge($queryParams, ['page' => $current_page + 1])); ?>">Avanti</a>
+                </li>
+            </ul>
+        </nav>
+    <?php endif; ?>
+
 </div>
 
 <div class="modal fade" id="articoloModal" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <form id="articoloForm" action="processa_articolo.php" method="POST">
-                <div class="modal-header"><h5 class="modal-title" id="modalTitle"></h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body">
-                    <input type="hidden" name="id" id="articoloId"><input type="hidden" name="action" id="formAction">
-                    <div class="row"><div class="col-md-6 mb-3"><label for="codice_articolo" class="form-label">Codice Articolo <span class="text-danger">*</span></label><input type="text" class="form-control" id="codice_articolo" name="codice_articolo" required></div><div class="col-md-6 mb-3"><label for="descrizione" class="form-label">Descrizione <span class="text-danger">*</span></label><input type="text" class="form-control" id="descrizione" name="descrizione" required></div></div>
-                    <div class="row"><div class="col-md-6 mb-3"><label for="categoria_id" class="form-label">Categoria</label><select class="form-select" id="categoria_id" name="categoria_id"><option value="">-- Seleziona --</option><?php foreach ($categorie as $c): ?><option value="<?php echo $c['id']; ?>"><?php echo htmlspecialchars($c['nome']); ?></option><?php endforeach; ?></select></div><div class="col-md-6 mb-3"><label for="fornitore_id" class="form-label">Fornitore</label><select class="form-select" id="fornitore_id" name="fornitore_id"><option value="">-- Seleziona --</option><?php foreach ($fornitori as $f): ?><option value="<?php echo $f['id']; ?>"><?php echo htmlspecialchars($f['nome_fornitore']); ?></option><?php endforeach; ?></select></div></div>
-                    <div class="row"><div class="col-md-6 mb-3"><label for="prezzo_acquisto" class="form-label">Prezzo Acquisto</label><div class="input-group"><span class="input-group-text">€</span><input type="number" step="0.01" class="form-control" id="prezzo_acquisto" name="prezzo_acquisto"></div></div><div class="col-md-6 mb-3"><label for="scorta_minima" class="form-label">Scorta Minima</label><input type="number" class="form-control" id="scorta_minima" name="scorta_minima" min="0"></div></div>
-                    <hr><h5 class="mt-3">Proprietà Specifiche</h5><div id="proprieta-dinamiche-container" class="row"></div>
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button><button type="submit" class="btn btn-primary">Salva</button></div>
+                <div class="modal-body">
+                    <input type="hidden" name="id" id="articoloId">
+                    <input type="hidden" name="action" id="formAction">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="codice_articolo" class="form-label">Codice Articolo <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="codice_articolo" name="codice_articolo" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="descrizione" class="form-label">Descrizione <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="descrizione" name="descrizione" required>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="categoria_id" class="form-label">Categoria</label>
+                            <select class="form-select" id="categoria_id" name="categoria_id">
+                                <option value="">-- Seleziona --</option>
+                                <?php foreach ($categorie as $c): ?>
+                                    <option value="<?php echo $c['id']; ?>"><?php echo htmlspecialchars($c['nome']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="fornitore_id" class="form-label">Fornitore</label>
+                            <select class="form-select" id="fornitore_id" name="fornitore_id">
+                                <option value="">-- Seleziona --</option>
+                                <?php foreach ($fornitori as $f): ?>
+                                    <option value="<?php echo $f['id']; ?>"><?php echo htmlspecialchars($f['nome_fornitore']); ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="prezzo_acquisto" class="form-label">Prezzo Acquisto</label>
+                            <div class="input-group">
+                                <span class="input-group-text">€</span>
+                                <input type="number" step="0.01" class="form-control" id="prezzo_acquisto" name="prezzo_acquisto">
+                            </div>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="scorta_minima" class="form-label">Scorta Minima</label>
+                            <input type="number" class="form-control" id="scorta_minima" name="scorta_minima" min="0">
+                        </div>
+                    </div>
+                    <hr>
+                    <h5 class="mt-3">Proprietà Specifiche</h5>
+                    <div id="proprieta-dinamiche-container" class="row"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn btn-primary">Salva</button>
+                </div>
             </form>
         </div>
     </div>
 </div>
 
-<form id="deleteForm" method="POST" action="processa_articolo.php"><input type="hidden" name="id" id="deleteId"><input type="hidden" name="action" value="delete"></form>
+<form id="deleteForm" method="POST" action="processa_articolo.php">
+    <input type="hidden" name="id" id="deleteId">
+    <input type="hidden" name="action" value="delete">
+</form>
 
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>

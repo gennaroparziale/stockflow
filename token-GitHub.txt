@@ -6,3 +6,6 @@ REPO
 https://github.com/gennaroparziale/stockflow.git
 
 git clone https://github.com/gennaroparziale/stockflow.git
+
+NUOVO TOKEN
+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
