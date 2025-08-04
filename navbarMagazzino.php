@@ -56,6 +56,7 @@ $reportPages = array('report_sottoscorta.php');
                     </a>
                     <ul class="dropdown-menu">
                         <li><a class="dropdown-item" href="report_sottoscorta.php">Articoli Sotto Scorta</a></li>
+                        <li><a class="dropdown-item" href="stampa_qrcode.php">Stampa QR Code Articoli</a></li>
                     </ul>
                 </li>
                 <li class="nav-item">
