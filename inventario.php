@@ -157,7 +157,7 @@ include 'navbarMagazzino.php';
                     <td><?php echo htmlspecialchars($item['descrizione']); ?></td>
                     <td><?php echo htmlspecialchars($item['nome_fornitore']); ?></td>
                     <td class="text-center">
-                        <span class="badge fs-6 <?php echo $item['giacenza'] > 0 ? 'bg-success' : ($item['giacenza'] < 0 ? 'bg-danger' : 'bg-warning'); ?>">
+                        <span class="badge fs-6 <?php echo $item['giacenza'] > 0 ? 'bg-success' : ($item['giacenza'] <= 0 ? 'bg-danger' : 'bg-warning'); ?>">
                             <?php echo $item['giacenza']; ?>
                         </span>
                     </td>
