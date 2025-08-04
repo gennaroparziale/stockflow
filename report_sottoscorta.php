@@ -1,4 +1,5 @@
 <?php
+header('Content-type: text/html; charset=utf-8');
 require_once 'db.php';
 require_once 'auth_check.php';
 // --- CONFIGURAZIONE PAGINAZIONE ---
@@ -9,7 +10,7 @@ if ($current_page < 1) {
 }
 
 // Condizione WHERE per gli articoli da riordinare
-$where_condition = " WHERE i.giacenza <= a.scorta_minima AND a.scorta_minima > 0 ";
+$where_condition = " WHERE i.giacenza < a.scorta_minima AND a.scorta_minima > 0 ";
 
 // --- QUERY PER CONTEGGIO TOTALE ARTICOLI ---
 $count_sql = "SELECT COUNT(a.id) FROM articoli a JOIN inventario i ON a.id = i.articolo_id" . $where_condition;
