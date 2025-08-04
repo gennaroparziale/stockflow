@@ -157,11 +157,13 @@ include 'navbarMagazzino.php';
                     <td><?php echo htmlspecialchars($item['descrizione']); ?></td>
                     <td><?php echo htmlspecialchars($item['nome_fornitore']); ?></td>
                     <td class="text-center">
-                        <span class="badge fs-6 <?php echo $item['giacenza'] > 0 ? 'bg-success' : 'bg-danger'; ?>">
+                        <span class="badge fs-6 <?php echo $item['giacenza'] > 0 ? 'bg-success' : ($item['giacenza'] < 0 ? 'bg-danger' : 'bg-warning'); ?>">
                             <?php echo $item['giacenza']; ?>
                         </span>
                     </td>
                     <td class="text-end">
+                        <button class="btn btn-sm btn-success" onclick="apriModaleMovimento('carico', <?php echo $item['id']; ?>, '<?php echo htmlspecialchars(addslashes($item['descrizione'])); ?>', <?php echo $item['giacenza']; ?>)" title="Carica"><i class="bi bi-plus-lg"></i></button>
+                        <button class="btn btn-sm btn-warning" onclick="apriModaleMovimento('scarico', <?php echo $item['id']; ?>, '<?php echo htmlspecialchars(addslashes($item['descrizione'])); ?>', <?php echo $item['giacenza']; ?>)" title="Scarica"><i class="bi bi-dash-lg"></i></button>
                         <a href="dettaglio_articolo.php?id=<?php echo $item['id']; ?>" class="btn btn-sm btn-info" title="Vedi Dettaglio"><i class="bi bi-eye"></i></a>
                     </td>
                 </tr>
@@ -193,12 +195,82 @@ include 'navbarMagazzino.php';
     <?php endif; ?>
 </div>
 
+<div class="modal fade" id="movimentoModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="movimentoForm" action="processa_movimento.php" method="POST">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalTitle"></h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" name="articolo_id" id="articolo_id_modale">
+                    <input type="hidden" name="action" id="action_modale">
+                    <input type="hidden" name="source" value="inventario">
+
+                    <p>Articolo: <strong id="descrizione_articolo_modale"></strong></p>
+                    <p>Giacenza attuale: <strong id="giacenza_attuale_modale"></strong></p>
+
+                    <div class="mb-3">
+                        <label for="quantita" class="form-label"><strong>Quantità:</strong></label>
+                        <input type="number" name="quantita" id="quantita_modale" class="form-control" required min="1">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annulla</button>
+                    <button type="submit" class="btn" id="modalSubmitButton"></button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+    const movimentoModal = new bootstrap.Modal(document.getElementById('movimentoModal'));
+
+    function apriModaleMovimento(tipo, articoloId, descrizione, giacenza) {
+        const modalTitle = document.getElementById('modalTitle');
+        const modalSubmitButton = document.getElementById('modalSubmitButton');
+        const quantitaInput = document.getElementById('quantita_modale');
+
+        document.getElementById('articolo_id_modale').value = articoloId;
+        document.getElementById('action_modale').value = tipo;
+        document.getElementById('descrizione_articolo_modale').textContent = descrizione;
+        document.getElementById('giacenza_attuale_modale').textContent = giacenza;
+        quantitaInput.value = '1';
+
+        if (tipo === 'carico') {
+            modalTitle.textContent = 'Carica Articolo';
+            modalSubmitButton.className = 'btn btn-success';
+            modalSubmitButton.innerHTML = '<i class="bi bi-check-lg"></i> Conferma Carico';
+            quantitaInput.removeAttribute('max');
+        } else { // scarico
+            modalTitle.textContent = 'Scarica Articolo';
+            modalSubmitButton.className = 'btn btn-warning';
+            modalSubmitButton.innerHTML = '<i class="bi bi-check-lg"></i> Conferma Scarico';
+            if (giacenza > 0) {
+                quantitaInput.setAttribute('max', giacenza);
+            } else {
+                quantitaInput.setAttribute('max', 0);
+            }
+        }
+        movimentoModal.show();
+    }
+
     $(document).ready(function() {
         const filtriContainer = $('#filtri-proprieta-container');
         const urlParams = new URLSearchParams(window.location.search);
+
+        // Gestione messaggio di successo
+        if (urlParams.has('movimento') && urlParams.get('movimento') === 'ok') {
+            const successAlert = $('<div class="alert alert-success alert-dismissible fade show" role="alert">Movimento registrato con successo!<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button></div>');
+            $('.container').prepend(successAlert);
+            const cleanUrl = window.location.pathname + window.location.search.replace(/&?movimento=ok/, '');
+            window.history.replaceState({}, document.title, cleanUrl);
+        }
 
         function caricaFiltriProprieta(categoriaId) {
             if (!categoriaId) {
